@@ -25,3 +25,33 @@ export class Pubsub<T> {
     this.listeners.forEach(listener => listener(data))
   }
 }
+
+export class PubsubStore<T> {
+  private pubsub = new Pubsub<T>()
+  private state: T
+
+  constructor(initialState: T) {
+    this.state = initialState
+  }
+
+  subscribe(listener: PubsubListener<T>) {
+    this.pubsub.subscribe(listener)
+    listener(this.state)
+  }
+
+  unsubscribe(listener: PubsubListener<T>) {
+    this.pubsub.unsubscribe(listener)
+  }
+
+  set(newState: T) {
+    this.state = newState
+    this.pubsub.publish(newState)
+  }
+
+  snapshot(): T {
+    return this.state
+  }
+}
+
+
+// TODO: immer inspired PubsubMutator
