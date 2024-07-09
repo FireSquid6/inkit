@@ -2,50 +2,105 @@ import { Pubsub } from "./pubsub"
 
 export class Inkit {
   render = new Pubsub<number>()
-  mutationObserver: MutationObserver 
+  mutationObserver: MutationObserver
   listeners: Map<string, InkitListener[]> = new Map()
 
   constructor() {
     this.mutationObserver = new MutationObserver((records) => {
       // clean up this mess
       for (const record of records) {
-        // see mdn docs on MutationRecords for more info
-        // TODO: add ability to listen for mutations on specific elements
-        for (const node of record.addedNodes) {
-          if (!(node instanceof HTMLElement)) {
-            continue
-          }
+        this.processRecord(record)
 
-          const listeners = this.listeners.get(node.id)
-          if (!listeners) {
-            continue
-          }
-          for (const listener of listeners) {
-            if (listener.added) {
-              listener.added(node)
-            }
-          }
-
-        }
-
-        // TODO: do the same thing as above but for removed nodes
-        const target = record.target as HTMLElement
-
-        // TODO: do stuff on the target
-        // TODO: will this dupliacte events? Maybe we should only iterate through the first record
-        // or just do some tests to see how this even works
-        if (target instanceof HTMLElement) {
-          const listeners = this.listeners.get(target.id)
-          if (listeners) {
-            for (const listener of listeners) {
-              if (listener.added) {
-                listener.added(target)
-              }
-            }
-          }
-        }
       }
     })
+  }
+
+  private processRecord(record: MutationRecord) {
+    // see mdn docs on MutationRecords for more info
+    this.processAddedNodes(record.addedNodes)
+    this.processRemovedNodes(record.removedNodes)
+
+    // TODO: do the same thing as above but for removed nodes
+    const target = record.target as HTMLElement
+
+    if (!(target instanceof HTMLElement)) {
+      return
+    }
+    const listeners = this.listeners.get(target.id)
+    if (!listeners) {
+      return
+    }
+
+    switch (record.type) {
+      case "attributes":
+        const newValue = target.getAttribute(record.attributeName!)
+        const oldVlaue = record.oldValue
+        for (const listener of listeners) {
+          if (!listener.attributesModified) {
+            continue
+          }
+
+          listener.attributesModified(target, {
+            name: record.attributeName!,
+            value: newValue!,
+            oldValue: oldVlaue!,
+          })
+        }
+
+        break
+      case "childList":
+        for (const listener of listeners) {
+          if (!listener.childrenModified) {
+            continue
+          }
+
+          listener.childrenModified(target, {
+            added: record.addedNodes,
+            removed: record.removedNodes,
+          })
+        }
+
+        break
+    }
+  }
+
+  private processAddedNodes(nodes: NodeList) {
+    for (const node of nodes) {
+      if (!(node instanceof HTMLElement)) {
+        continue
+      }
+
+      const listeners = this.listeners.get(node.id)
+      if (!listeners) {
+        continue
+      }
+
+      for (const listener of listeners) {
+        if (listener.added) {
+          listener.added(node)
+        }
+      }
+    }
+
+  }
+
+  private processRemovedNodes(nodes: NodeList) {
+    for (const node of nodes) {
+      if (!(node instanceof HTMLElement)) {
+        continue
+      }
+
+      const listeners = this.listeners.get(node.id)
+      if (!listeners) {
+        continue
+      }
+
+      for (const listener of listeners) {
+        if (listener.removed) {
+          listener.removed(node)
+        }
+      }
+    }
 
   }
 
@@ -54,7 +109,7 @@ export class Inkit {
     this.uuid += 1
     return `inkit-${this.uuid}`
   }
-  
+
   subscribe(id: string, listener: InkitListener) {
     if (!this.listeners.has(id)) {
       this.listeners.set(id, [])
@@ -88,6 +143,20 @@ export class Inkit {
 type InkitListener = {
   added?: (element: HTMLElement) => void
   removed?: (element: HTMLElement) => void
+  // Note: this method only looks one layer deep. If "grandchildren" are added or removed, this method will not be called
+  // If you find that you're trying to do that, you're probably wrong
+  childrenModified?: (element: HTMLElement, event: ChildrenEvent) => void
+  attributesModified?: (element: HTMLElement, event: AttributeEvent) => void
+}
+
+type ChildrenEvent = {
+  added: NodeList
+  removed: NodeList
+}
+type AttributeEvent = {
+  value: string
+  oldValue: string
+  name: string
 }
 
 
