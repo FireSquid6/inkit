@@ -1,16 +1,14 @@
-import { Pubsub } from "./pubsub"
+import { Signal } from "./pubsub"
 
 export class Inkit {
-  render = new Pubsub<number>()
+  render = new Signal<number>()
   mutationObserver: MutationObserver
   listeners: Map<string, InkitListener[]> = new Map()
 
   constructor() {
     this.mutationObserver = new MutationObserver((records) => {
-      // clean up this mess
       for (const record of records) {
         this.processRecord(record)
-
       }
     })
   }

@@ -1,19 +1,18 @@
+type Listener<T> = (data: T) => void
 
-// pubsub is the recommended way to contain state in inkchat
-type PubsubListener<T> = (data: T) => void
-export class Pubsub<T> {
-  private listeners: PubsubListener<T>[] = []
+export class Signal<T> {
+  private listeners: Listener<T>[] = []
 
-  subscribe(listener: PubsubListener<T>) {
+  subscribe(listener: Listener<T>) {
     this.listeners.push(listener)
   }
 
-  unsubscribe(listener: PubsubListener<T>) {
+  unsubscribe(listener: Listener<T>) {
     this.listeners = this.listeners.filter(l => l !== listener)
   }
 
   // listens once and then removes itself
-  trigger(listener: PubsubListener<T>) {
+  trigger(listener: Listener<T>) {
     const onceListener = (data: T) => {
       listener(data)
       this.unsubscribe(onceListener)
@@ -26,26 +25,27 @@ export class Pubsub<T> {
   }
 }
 
-export class PubsubStore<T> {
-  private pubsub = new Pubsub<T>()
+export class Store<T> {
+  private signal = new Signal<T>()
   private state: T
 
   constructor(initialState: T) {
     this.state = initialState
   }
-
-  subscribe(listener: PubsubListener<T>) {
-    this.pubsub.subscribe(listener)
+  
+  // subscribes to and immediately triggers the listener with the current state
+  subscribe(listener: Listener<T>) {
+    this.signal.subscribe(listener)
     listener(this.state)
   }
 
-  unsubscribe(listener: PubsubListener<T>) {
-    this.pubsub.unsubscribe(listener)
+  unsubscribe(listener: Listener<T>) {
+    this.signal.unsubscribe(listener)
   }
 
   set(newState: T) {
     this.state = newState
-    this.pubsub.publish(newState)
+    this.signal.publish(newState)
   }
 
   snapshot(): T {
