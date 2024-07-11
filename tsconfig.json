@@ -23,8 +23,10 @@
     /* UI stuff */
     // "plugins": [{ "name": "@kitajs/ts-html-plugin"}],  // enable this if you want to check for xss attacks
     "jsx": "react-jsx",
-    "jsxImportSource": "@kitajs/html"
+    "jsxImportSource": "@kitajs/html",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
 
   },
-  "include": ["src"]
 }

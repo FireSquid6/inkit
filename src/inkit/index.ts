@@ -1,9 +1,8 @@
-import { Signal } from "./pubsub"
 
 export class Inkit {
-  render = new Signal<number>()
   mutationObserver: MutationObserver
   listeners: Map<string, InkitListener[]> = new Map()
+  knownIds: Map<string, boolean> = new Map() // maps whether an id exists or not
 
   constructor() {
     this.mutationObserver = new MutationObserver((records) => {
@@ -14,25 +13,22 @@ export class Inkit {
   }
 
   private processRecord(record: MutationRecord) {
-    // see mdn docs on MutationRecords for more info
-    this.processAddedNodes(record.addedNodes)
-    this.processRemovedNodes(record.removedNodes)
-
-    // TODO: do the same thing as above but for removed nodes
     const target = record.target as HTMLElement
 
     if (!(target instanceof HTMLElement)) {
       return
     }
-    const listeners = this.listeners.get(target.id)
-    if (!listeners) {
-      return
-    }
+
 
     switch (record.type) {
       case "attributes":
+        const listeners = this.listeners.get(target.id)
+        if (!listeners) {
+          return
+        }
         const newValue = target.getAttribute(record.attributeName!)
         const oldVlaue = record.oldValue
+
         for (const listener of listeners) {
           if (!listener.attributesModified) {
             continue
@@ -47,59 +43,35 @@ export class Inkit {
 
         break
       case "childList":
-        for (const listener of listeners) {
-          if (!listener.childrenModified) {
+        // iterate through list of existingIds.
+        for (const id of this.knownIds.keys()) {
+          const element = document.getElementById(id)
+          console.log(element)
+          const exists = element !== null
+          const previousExists = this.knownIds.get(id)!
+
+          if (exists === previousExists) {
             continue
           }
 
-          listener.childrenModified(target, {
-            added: record.addedNodes,
-            removed: record.removedNodes,
-          })
-        }
+          this.knownIds.set(id, exists)
 
+          const listeners = this.listeners.get(id)!
+          if (!listeners) {
+            continue
+          }
+
+          for (const listener of listeners) {
+            const func = exists ? listener.added : listener.removed
+
+            if (!func) {
+              continue
+            }
+            func(element!)
+          }
+        }
         break
     }
-  }
-
-  private processAddedNodes(nodes: NodeList) {
-    for (const node of nodes) {
-      if (!(node instanceof HTMLElement)) {
-        continue
-      }
-
-      const listeners = this.listeners.get(node.id)
-      if (!listeners) {
-        continue
-      }
-
-      for (const listener of listeners) {
-        if (listener.added) {
-          listener.added(node)
-        }
-      }
-    }
-
-  }
-
-  private processRemovedNodes(nodes: NodeList) {
-    for (const node of nodes) {
-      if (!(node instanceof HTMLElement)) {
-        continue
-      }
-
-      const listeners = this.listeners.get(node.id)
-      if (!listeners) {
-        continue
-      }
-
-      for (const listener of listeners) {
-        if (listener.removed) {
-          listener.removed(node)
-        }
-      }
-    }
-
   }
 
   private uuid = 0
@@ -117,6 +89,13 @@ export class Inkit {
     listeners.push(listener)
     this.listeners.set("id", listeners)
 
+    const element = document.getElementById(id)
+
+    this.knownIds.set(id, element !== null)
+    console.log(this.knownIds)
+    if (listener.instantly) {
+      listener.instantly(element)
+    }
   }
 
   unsubscribe(id: string, listener: InkitListener) {
@@ -124,11 +103,17 @@ export class Inkit {
     if (!listeners) {
       return
     }
+    
+    const index = listeners.indexOf(listener)
+    if (index === -1) {
+      return
+    }
 
-    const newListeners = listeners.filter(l => l !== listener)
-    this.listeners.set(id, newListeners)
+    listeners.splice(index, 1)
+    this.listeners.set(id, listeners)
   }
 
+  // this element should have no children when you first start it
   start(element: HTMLElement) {
     this.mutationObserver.observe(element, {
       childList: true,
@@ -138,19 +123,15 @@ export class Inkit {
   }
 }
 
-type InkitListener = {
-  added?: (element: HTMLElement) => void
-  removed?: (element: HTMLElement) => void
-  // Note: this method only looks one layer deep. If "grandchildren" are added or removed, this method will not be called
-  // If you find that you're trying to do that, you're probably wrong
-  childrenModified?: (element: HTMLElement, event: ChildrenEvent) => void
-  attributesModified?: (element: HTMLElement, event: AttributeEvent) => void
+export type InkitListener = {
+  instantly?: (element: HTMLElement | null, inkit: Inkit) => InkitListenerRespone  // called instantly when the listener is added
+  added?: (element: HTMLElement, inkit: Inkit) => InkitListenerRespone  // called whenever the element is added or re-added
+  removed?: (inkit: Inkit) => InkitListenerRespone // called whenever the element is removed
+  attributesModified?: (element: HTMLElement, event: AttributeEvent, inkit: Inkit) => InkitListenerRespone // called whenever the attributes of the element are modified
 }
 
-type ChildrenEvent = {
-  added: NodeList
-  removed: NodeList
-}
+type InkitListenerRespone = void | Promise<void>
+
 type AttributeEvent = {
   value: string
   oldValue: string
