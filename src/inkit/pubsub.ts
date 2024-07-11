@@ -52,6 +52,3 @@ export class Store<T> {
     return this.state
   }
 }
-
-
-// TODO: immer inspired PubsubMutator

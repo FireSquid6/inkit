@@ -1,6 +1,6 @@
 import { InkitListener } from ".";
 
-export function selfRemovingListener(id: string, listener: InkitListener): InkitListener {
+export function selfRemoving(id: string, listener: InkitListener): InkitListener {
   const wrapperListener: InkitListener = {
     ...listener,
     removed: (inkit) => {

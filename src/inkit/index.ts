@@ -38,9 +38,8 @@ export class Inkit {
             name: record.attributeName!,
             value: newValue!,
             oldValue: oldVlaue!,
-          })
+          }, this)
         }
-
         break
       case "childList":
         // iterate through list of existingIds.
@@ -62,22 +61,22 @@ export class Inkit {
           }
 
           for (const listener of listeners) {
-            const func = exists ? listener.added : listener.removed
-
-            if (!func) {
-              continue
+            if (exists && listener.added) {
+              listener.added(element!, this)
             }
-            func(element!)
+            if (!exists && listener.removed) {
+              listener.removed(this)
+            }
           }
         }
         break
     }
   }
 
-  private uuid = 0
-  getNewUuid(): string {
-    this.uuid += 1
-    return `inkit-${this.uuid}`
+  private id = 0
+  getId(): string {
+    this.id += 1
+    return `inkit-${this.id}`
   }
 
   subscribe(id: string, listener: InkitListener) {
@@ -94,7 +93,7 @@ export class Inkit {
     this.knownIds.set(id, element !== null)
     console.log(this.knownIds)
     if (listener.instantly) {
-      listener.instantly(element)
+      listener.instantly(element, this)
     }
   }
 
